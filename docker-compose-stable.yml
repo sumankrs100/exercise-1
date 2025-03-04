@@ -1,0 +1,42 @@
+version: '3'
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: prefect
+      POSTGRES_PASSWORD: prefect
+      POSTGRES_DB: prefect
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    
+  redis:
+    image: redis:7
+    volumes:
+      - redis-data:/data
+
+  prefect-server:
+    image: prefecthq/prefect:3.0.3-python3.11
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://prefect:prefect@postgres:5432/prefect
+      - PREFECT_API_REDIS_URL=redis://redis:6379/0
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+    ports:
+      - "4200:4200"
+    command: prefect server start
+    
+  prefect-agent:
+    image: prefecthq/prefect:3.0.3-python3.11
+    depends_on:
+      - prefect-server
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+    command: prefect worker start -p default
+    volumes:
+      - ./flows:/opt/prefect/flows
+
+volumes:
+  postgres-data:
+  redis-data:
