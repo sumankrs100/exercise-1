@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  prefect-server:
+    image: prefecthq/prefect:3-stable
+    container_name: prefect-server
+    restart: always
+    ports:
+      - "4200:4200"
+    environment:
+      - PREFECT_API_URL=http://0.0.0.0:4200/api
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+    volumes:
+      - prefect-data:/root/.prefect
+    command: ["prefect", "server", "start"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - prefect-network
+
+  prefect-agent:
+    image: prefecthq/prefect:3-stable
+    container_name: prefect-agent
+    restart: always
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+    volumes:
+      - prefect-data:/root/.prefect
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["prefect", "agent", "start", "-p", "default"]
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    networks:
+      - prefect-network
+
+volumes:
+  prefect-data:
+    name: prefect-data
+
+networks:
+  prefect-network:
+    name: prefect-network
