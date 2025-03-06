@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    container_name: prefect-server
+    restart: always
+    expose:
+      - "4200"
+    environment:
+      # Internal API URL for the server container
+      - PREFECT_API_URL=http://0.0.0.0:4200/api
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      # SQLite database configuration
+      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////root/.prefect/prefect.db
+      # Authentication settings
+      - PREFECT_SERVER_AUTH_ENABLED=true
+      - PREFECT_SERVER_AUTH_TYPE=basic
+      # Admin user credentials
+      - PREFECT_SERVER_AUTH_BASIC_ADMIN_USERNAME=admin
+      - PREFECT_SERVER_AUTH_BASIC_ADMIN_PASSWORD=yourSecurePassword123
+    volumes:
+      - prefect-data:/root/.prefect
+    command: ["prefect", "server", "start"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://0.0.0.0:4200/api/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - prefect-network
+
+  prefect-agent:
+    image: prefecthq/prefect:3-latest
+    container_name: prefect-agent
+    restart: always
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      # Authentication credentials for the agent
+      - PREFECT_API_KEY=yourAgentApiKey123
+    volumes:
+      - prefect-data:/root/.prefect
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["prefect", "agent", "start", "-p", "default"]
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    networks:
+      - prefect-network
+
+  nginx:
+    image: nginx:latest
+    container_name: prefect-nginx
+    restart: always
+    ports:
+      - "4200:443"  # Expose HTTPS on port 4200
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - /path/to/your/ssl/certificates:/etc/nginx/ssl  # Mount your SSL certificates
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    networks:
+      - prefect-network
+
+volumes:
+  prefect-data:
+    name: prefect-data
+
+networks:
+  prefect-network:
+    name: prefect-network
