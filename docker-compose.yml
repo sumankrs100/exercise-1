@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: nginx-https-proxy
+    # Option 1: Using host network (simpler, direct access to host services)
+    network_mode: "host"
+    # If using host network, comment out the ports section as it won't be used
+    # ports:
+    #   - "80:80"
+    #   - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      - nginx-logs:/var/log/nginx
+    environment:
+      - TARGET_PORT=5200  # Your application port
+    restart: unless-stopped
+
+    # Option 2: Alternative to host network - use Docker network with host IP
+    # Instead of network_mode: "host", you can use this:
+    # extra_hosts:
+    #   - "host.docker.internal:172.17.0.1"  # Typical Docker host IP on Linux
+    # Then keep the ports mapping:
+    # ports:
+    #  - "80:80"
+    #  - "443:443"
+
+volumes:
+  nginx-logs:
