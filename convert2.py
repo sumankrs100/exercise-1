@@ -1,0 +1,149 @@
+import os
+import subprocess
+import argparse
+import json
+
+def get_video_duration(video_path):
+    """
+    Get the duration of a video file in seconds.
+    
+    Args:
+        video_path (str): Path to the video file
+        
+    Returns:
+        float: Duration of the video in seconds
+    """
+    cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "json",
+        video_path
+    ]
+    
+    try:
+        result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        data = json.loads(result.stdout)
+        duration = float(data['format']['duration'])
+        return duration
+    except (subprocess.CalledProcessError, KeyError, json.JSONDecodeError) as e:
+        print(f"Error getting video duration: {e}")
+        return 0
+
+def format_duration(seconds):
+    """
+    Format seconds into minutes and seconds.
+    
+    Args:
+        seconds (float): Duration in seconds
+        
+    Returns:
+        str: Formatted duration as "MM:SS"
+    """
+    minutes = int(seconds // 60)
+    remaining_seconds = int(seconds % 60)
+    return f"{minutes}:{remaining_seconds:02d}"
+
+def reduce_fps(input_path, output_path=None, target_fps=6, reduce_quality=True):
+    """
+    Reduce the frames per second of an MP4 video to the target FPS and optionally lower quality.
+    
+    Args:
+        input_path (str): Path to the input video file
+        output_path (str, optional): Path for the output video file. If None, a default name will be generated
+        target_fps (int, optional): Target frames per second. Defaults to 6
+        reduce_quality (bool, optional): If True, also reduces quality to minimize file size. Defaults to True
+        
+    Returns:
+        str: Path to the output video file
+    """
+    # Check if input file exists
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+    
+    # Get original video info
+    original_duration = get_video_duration(input_path)
+    original_duration_formatted = format_duration(original_duration)
+    original_size = os.path.getsize(input_path) / (1024 * 1024)  # Size in MB
+    print(f"Original video duration: {original_duration_formatted} (MM:SS)")
+    print(f"Original file size: {original_size:.2f} MB")
+    
+    # Generate output filename if not provided
+    if output_path is None:
+        filename, ext = os.path.splitext(input_path)
+        quality_suffix = "_lq" if reduce_quality else ""
+        output_path = f"{filename}_{target_fps}fps{quality_suffix}{ext}"
+    
+    # Build the ffmpeg command
+    cmd = ["ffmpeg", "-i", input_path]
+    
+    # Video settings
+    cmd.extend(["-c:v", "libx264"])  # Video codec
+    cmd.extend(["-r", str(target_fps)])  # Target frame rate
+    
+    if reduce_quality:
+        cmd.extend(["-crf", "28"])  # Higher CRF means lower quality (0-51)
+        cmd.extend(["-preset", "medium"])  # Encoding speed/compression ratio
+        cmd.extend(["-vf", "scale=iw/2:ih/2"])  # Reduce resolution by half
+        cmd.extend(["-c:a", "aac"])  # Re-encode audio with AAC codec
+        cmd.extend(["-b:a", "64k"])  # Reduce audio bitrate
+        cmd.extend(["-ac", "1"])  # Convert to mono audio
+    else:
+        cmd.extend(["-crf", "23"])  # Standard quality
+        cmd.extend(["-c:a", "copy"])  # Copy audio without re-encoding
+    
+    # Output file
+    cmd.extend(["-y", output_path])  # Overwrite output file if it exists
+    
+    # Execute the command
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        
+        # Get converted video info
+        converted_duration = get_video_duration(output_path)
+        converted_duration_formatted = format_duration(converted_duration)
+        converted_size = os.path.getsize(output_path) / (1024 * 1024)  # Size in MB
+        
+        print(f"Successfully converted video to {target_fps} FPS: {output_path}")
+        print(f"Converted video duration: {converted_duration_formatted} (MM:SS)")
+        print(f"Converted file size: {converted_size:.2f} MB")
+        
+        # Calculate size reduction percentage
+        size_reduction = ((original_size - converted_size) / original_size) * 100
+        print(f"File size reduction: {size_reduction:.1f}%")
+        
+        # Calculate and display the duration difference
+        duration_diff = abs(original_duration - converted_duration)
+        if duration_diff > 1:  # Only show if difference is more than 1 second
+            diff_formatted = format_duration(duration_diff)
+            if original_duration > converted_duration:
+                print(f"Duration decreased by: {diff_formatted} (MM:SS)")
+            else:
+                print(f"Duration increased by: {diff_formatted} (MM:SS)")
+        
+        return output_path
+    except subprocess.CalledProcessError as e:
+        print(f"Error during conversion: {e}")
+        print(f"ffmpeg error output: {e.stderr.decode()}")
+        raise
+    except FileNotFoundError:
+        print("ffmpeg is not installed or not found in the system path.")
+        print("Please install ffmpeg before using this script.")
+        raise
+
+if __name__ == "__main__":
+    # Create argument parser
+    parser = argparse.ArgumentParser(description="Reduce video FPS and optionally degrade quality to reduce file size")
+    parser.add_argument("input", help="Path to the input video file")
+    parser.add_argument("-o", "--output", help="Path for the output video file (optional)")
+    parser.add_argument("-f", "--fps", type=int, default=6, help="Target FPS (default: 6)")
+    parser.add_argument("-q", "--quality", action="store_true", default=True, 
+                        help="Reduce quality to minimize file size (default: True)")
+    parser.add_argument("--keep-quality", action="store_false", dest="quality",
+                        help="Keep original quality, only reduce FPS")
+    
+    # Parse arguments
+    args = parser.parse_args()
+    
+    # Call the function
+    reduce_fps(args.input, args.output, args.fps, args.quality)
