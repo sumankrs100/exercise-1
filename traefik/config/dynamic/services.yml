@@ -1,0 +1,75 @@
+## Dynamic Configuration for External Microservices
+
+http:
+  routers:
+    # User API Service Router
+    user-api-router:
+      rule: "Host(`api.example.com`) && PathPrefix(`/users`)"
+      service: user-api-service
+      entryPoints:
+        - web
+        - websecure
+      # Enable TLS for HTTPS
+      # tls: {}
+    
+    # Product API Service Router
+    product-api-router:
+      rule: "Host(`api.example.com`) && PathPrefix(`/products`)"
+      service: product-api-service
+      entryPoints:
+        - web
+        - websecure
+      # tls: {}
+    
+    # Order API Service Router
+    order-api-router:
+      rule: "Host(`api.example.com`) && PathPrefix(`/orders`)"
+      service: order-api-service
+      entryPoints:
+        - web
+        - websecure
+      # tls: {}
+
+  services:
+    # Define User API Service with server load balancing
+    user-api-service:
+      loadBalancer:
+        servers:
+          - url: "http://user-server-1:8001"
+          - url: "http://user-server-2:8001"  # Additional server for load balancing
+    
+    # Define Product API Service
+    product-api-service:
+      loadBalancer:
+        servers:
+          - url: "http://product-server:8002"
+    
+    # Define Order API Service
+    order-api-service:
+      loadBalancer:
+        servers:
+          - url: "http://order-server-1:8003"
+          - url: "http://order-server-2:8003"
+
+  # Define middleware for common operations (optional)
+  middlewares:
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
+
+    cors-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        accessControlAllowOriginList:
+          - "https://example.com"
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+        accessControlMaxAge: 100
+        addVaryHeader: true

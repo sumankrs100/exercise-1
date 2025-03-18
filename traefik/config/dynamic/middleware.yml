@@ -1,0 +1,32 @@
+## Middleware Configuration
+
+http:
+  middlewares:
+    # Security headers middleware
+    secure-headers:
+      headers:
+        frameDeny: true
+        sslRedirect: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+    
+    # Basic Authentication middleware
+    admin-auth:
+      basicAuth:
+        users:
+          - "admin:$apr1$H6uskkkW$IgXLP6ewTrSuBkTrqE8wj/"  # admin:password (use htpasswd to generate)
+    
+    # Request compression
+    compress:
+      compress: {}
+    
+    # IP Whitelist (optional)
+    ip-whitelist:
+      ipWhiteList:
+        sourceRange:
+          - "192.168.1.0/24"
+          - "10.0.0.0/8"
