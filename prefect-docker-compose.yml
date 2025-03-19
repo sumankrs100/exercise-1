@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    container_name: prefect-server
+    restart: always
+    expose:
+      - "4200"
+    environment:
+      # Internal API URL for the server container
+      - PREFECT_API_URL=http://0.0.0.0:4200/api
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_SERVER_HEALTHCHECK_PORT=4200
+      # CORS configuration for Traefik integration
+      - PREFECT_UI_API_URL=https://your-gateway-domain/api
+      - PREFECT_SERVER_CORS_ALLOW_ORIGINS=https://your-gateway-domain
+      - PREFECT_SERVER_CORS_ALLOW_CREDENTIALS=true
+      - PREFECT_SERVER_CORS_ALLOW_METHODS=GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH
+      - PREFECT_SERVER_CORS_ALLOW_HEADERS=*
+      - PREFECT_SERVER_CORS_MAX_AGE=86400
+      # SQLite database configuration
+      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////root/.prefect/prefect.db
+      # Authentication settings
+      - PREFECT_SERVER_AUTH_ENABLED=true
+      - PREFECT_SERVER_AUTH_TYPE=basic
+      # Admin user credentials
+      - PREFECT_SERVER_AUTH_BASIC_ADMIN_USERNAME=admin
+      - PREFECT_SERVER_AUTH_BASIC_ADMIN_PASSWORD=yourSecurePassword123
+    volumes:
+      - prefect-data:/root/.prefect
+    command: ["prefect", "server", "start"]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "10", "http://0.0.0.0:4200/api/health"]
+      interval: 15s
+      timeout: 15s
+      retries: 10
+      start_period: 60s
+    networks:
+      - traefik-network
+    labels:
+      # Enable Traefik for this service
+      - "traefik.enable=true"
+      
+      # Define the router for the Prefect UI
+      - "traefik.http.routers.prefect.rule=Host(`your-gateway-domain`)"
+      - "traefik.http.routers.prefect.entrypoints=websecure"
+      - "traefik.http.routers.prefect.tls=true"
+      
+      # Define the service (targeting port 4200 on the container)
+      - "traefik.http.services.prefect.loadbalancer.server.port=4200"
+      
+      # Add CORS middleware configuration
+      - "traefik.http.middlewares.prefect-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH"
+      - "traefik.http.middlewares.prefect-cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.prefect-cors.headers.accesscontrolalloworiginlist=*"
+      - "traefik.http.middlewares.prefect-cors.headers.accesscontrolmaxage=86400"
+      - "traefik.http.middlewares.prefect-cors.headers.accesscontrolallowcredentials=true"
+      - "traefik.http.middlewares.prefect-cors.headers.addvaryheader=true"
+      
+      # Apply the CORS middleware to the router
+      - "traefik.http.routers.prefect.middlewares=prefect-cors@docker"
+
+  prefect-agent:
+    image: prefecthq/prefect:3-latest
+    container_name: prefect-agent
+    restart: always
+    environment:
+      - PREFECT_API_URL=http://prefect-server:4200/api
+      # Authentication credentials for the agent
+      - PREFECT_API_KEY=yourAgentApiKey123
+    volumes:
+      - prefect-data:/root/.prefect
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["prefect", "agent", "start", "-p", "default"]
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    networks:
+      - traefik-network
+
+volumes:
+  prefect-data:
+    name: prefect-data
+
+networks:
+  traefik-network:
+    external: true  # Assuming your Traefik is already running on this network
