@@ -1,0 +1,37 @@
+http:
+  routers:
+    # Router for the main HTTP port that redirects to the prefect entrypoint
+    prefect-redirect:
+      rule: "Host(`yourdomain.com`) && PathPrefix(`/prefect`)"
+      service: noop@internal
+      entryPoints:
+        - http
+      middlewares:
+        - prefect-redirect
+
+    # Router for the dedicated prefect entrypoint
+    prefect-service:
+      rule: "HostRegexp(`{host:.+}`)"
+      service: prefect-backend
+      entryPoints:
+        - prefect
+      middlewares:
+        - prefect-auth
+
+  middlewares:
+    prefect-auth:
+      basicAuth:
+        users:
+          - "admin:$apr1$ruca84Hq$mbjdMZBAG.KWn7vfN/SNK/"  # Username: admin, Password: password
+    
+    prefect-redirect:
+      redirectRegex:
+        regex: "^(https?://[^/]+)/prefect(/?.*)"
+        replacement: "${1}:8000${2}"
+        permanent: false
+  
+  services:
+    prefect-backend:
+      loadBalancer:
+        servers:
+          - url: "http://PREFECT_SERVER_IP:4200"  # Replace with your Prefect server IP and port

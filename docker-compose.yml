@@ -8,17 +8,16 @@ services:
     ports:
       - "80:80"      # HTTP
       - "443:443"    # HTTPS
-      - "8080:8080"  # Traefik Dashboard
+      - "8000:8000"  # Custom Prefect port
+      - "8080:8080"  # Traefik Dashboard (optional)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/config/traefik.yml:/etc/traefik/traefik.yml:ro
-      - ./traefik/config/dynamic:/etc/traefik/dynamic:ro
-      - ./traefik/certs:/etc/certs:ro
-      - ./traefik/logs:/var/log/traefik
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./config:/etc/traefik/config
+      - ./acme:/etc/traefik/acme
     networks:
       - traefik-network
 
 networks:
   traefik-network:
-    name: traefik-network
-    external: true
+    driver: bridge
