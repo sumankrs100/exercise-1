@@ -1,0 +1,51 @@
+http:
+  routers:
+    prefect:
+      rule: "Host(`yourdomain.com`) && PathPrefix(`/prefect`)"
+      service: prefect-backend
+      entryPoints:
+        - http
+      middlewares:
+        - prefect-oauth
+        - prefect-strip-prefix
+        - prefect-response-modifier
+
+  middlewares:
+    prefect-oauth:
+      forwardAuth:
+        address: "http://traefik-forward-auth:4181"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - "X-Forwarded-User"
+          - "X-Forwarded-Email"
+          - "X-Forwarded-Preferred-Username"
+    
+    prefect-strip-prefix:
+      stripPrefix:
+        prefixes:
+          - "/prefect"
+        forceSlash: false
+    
+    prefect-response-modifier:
+      plugin:
+        rewritebody:
+          rewrites:
+            - regex: 'href="/(.*?)"'
+              replacement: 'href="/prefect/$1"'
+            - regex: 'src="/(.*?)"'
+              replacement: 'src="/prefect/$1"'
+            - regex: 'url\("/(.*?)"\)'
+              replacement: 'url("/prefect/$1")'
+            - regex: '"url":"/([^"]*)"'
+              replacement: '"url":"/prefect/$1"'
+            - regex: '"endpoint":"/(.*?)"'
+              replacement: '"endpoint":"/prefect/$1"'
+  
+  services:
+    prefect-backend:
+      loadBalancer:
+        passHostHeader: true
+        responseForwarding:
+          flushInterval: "100ms"
+        servers:
+          - url: "http://PREFECT_SERVER_IP:4200"  # Replace with your Prefect server IP and port

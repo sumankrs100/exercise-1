@@ -1,0 +1,54 @@
+version: '3'
+
+services:
+  traefik:
+    image: traefik:v2.10
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"      # HTTP
+      - "443:443"    # HTTPS
+      - "8080:8080"  # Traefik Dashboard (optional)
+    environment:
+      - TRAEFIK_EXPERIMENTAL_PLUGINS_REWRITEBODY_MODULENAME=github.com/traefik/plugin-rewritebody
+      - TRAEFIK_EXPERIMENTAL_PLUGINS_REWRITEBODY_VERSION=v0.3.1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./config:/etc/traefik/config
+      - ./acme:/etc/traefik/acme
+    networks:
+      - traefik-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.yourdomain.com`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=traefik-auth"
+      - "traefik.http.middlewares.traefik-auth.forwardAuth.address=http://traefik-forward-auth:4181"
+      - "traefik.http.middlewares.traefik-auth.forwardAuth.authResponseHeaders=X-Forwarded-User"
+
+  traefik-forward-auth:
+    image: thomseddon/traefik-forward-auth:2.2.0
+    container_name: traefik-forward-auth
+    restart: unless-stopped
+    environment:
+      - DEFAULT_PROVIDER=oidc
+      - PROVIDERS_OIDC_ISSUER_URL=https://keycloak.yourdomain.com/auth/realms/YOUR_REALM
+      - PROVIDERS_OIDC_CLIENT_ID=traefik
+      - PROVIDERS_OIDC_CLIENT_SECRET=your-client-secret
+      - SECRET=random-secret-string-for-cookie-encryption
+      - AUTH_HOST=auth.yourdomain.com
+      - COOKIE_DOMAIN=yourdomain.com
+      - INSECURE_COOKIE=false  # Set to true if not using HTTPS
+      - LIFETIME=43200        # Session length in seconds (12 hours)
+      - DEFAULT_ACTION=auth
+      - LOG_LEVEL=debug       # Change to info in production
+      # Optional: Limit access to specific roles/groups
+      # - PROVIDERS_OIDC_RESOURCE=traefik
+      # - PROVIDERS_OIDC_ROLES=admin,prefect-user
+    networks:
+      - traefik-network
+
+networks:
+  traefik-network:
+    driver: bridge
