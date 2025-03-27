@@ -1,0 +1,51 @@
+http:
+  routers:
+    # Router for the main HTTP port that redirects to the prefect entrypoint
+    prefect-redirect:
+      rule: "Host(`yourdomain.com`) && PathPrefix(`/prefect`)"
+      service: noop@internal
+      entryPoints:
+        - http
+      middlewares:
+        - prefect-redirect
+
+    # Router for Keycloak authentication
+    keycloak-auth:
+      rule: "Host(`yourdomain.com`) && PathPrefix(`/auth`)"
+      service: keycloak-service
+      entryPoints:
+        - http
+        - https
+
+    # Router for the dedicated prefect entrypoint
+    prefect-service:
+      rule: "HostRegexp(`{host:.+}`)"
+      service: prefect-backend
+      entryPoints:
+        - prefect
+      middlewares:
+        - prefect-keycloak-redirect
+
+  middlewares:
+    prefect-keycloak-redirect:
+      redirectRegex:
+        regex: "^(.*)$"
+        replacement: "http://keycloak:8080/realms/sample/protocol/openid-connect/auth?client_id=test1&response_type=code&scope=openid&redirect_uri=https://yourdomain.com/prefect/callback&prompt=login"
+        permanent: false
+    
+    prefect-redirect:
+      redirectRegex:
+        regex: "^(https?://[^/]+)/prefect(/?.*)"
+        replacement: "${1}:8000${2}"
+        permanent: false
+  
+  services:
+    prefect-backend:
+      loadBalancer:
+        servers:
+          - url: "http://PREFECT_SERVER_IP:4200"  # Replace with your Prefect server IP and port
+
+    keycloak-service:
+      loadBalancer:
+        servers:
+          - url: "http://keycloak:8080"
