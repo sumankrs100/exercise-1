@@ -18,7 +18,7 @@ services:
       - PREFECT_UI_OIDC_CLIENT_SECRET=your-client-secret-from-keycloak
       - PREFECT_UI_OIDC_AUTHORITY=https://your-keycloak-domain.com/auth/realms/your-realm
       - PREFECT_UI_OIDC_SCOPE=openid profile email roles
-      - PREFECT_UI_OIDC_REDIRECT_URI=https://your-traefik-domain.com/auth-callback
+      - PREFECT_UI_OIDC_REDIRECT_URI=http://your-traefik-domain.com/auth-callback
     depends_on:
       - postgres
     command: prefect server start
