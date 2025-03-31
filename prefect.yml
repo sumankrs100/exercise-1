@@ -1,0 +1,23 @@
+http:
+  routers:
+    prefect:
+      entryPoints:
+        - websecure
+      rule: "Host(`your-traefik-domain.com`)"
+      service: prefect
+      tls: true
+      middlewares:
+        - prefect-auth
+
+  services:
+    prefect:
+      loadBalancer:
+        servers:
+          - url: "http://prefect-vm-ip:4200"
+
+  middlewares:
+    prefect-auth:
+      forwardAuth:
+        address: "https://your-keycloak-domain.com/auth/realms/your-realm/protocol/openid-connect/auth"
+        authResponseHeaders:
+          - "Authorization"
